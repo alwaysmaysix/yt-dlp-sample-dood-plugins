@@ -14,7 +14,7 @@ import sys
 import time
 import math
 
-from ..compat import (
+from .compat import (
     compat_cookiejar_Cookie,
     compat_cookies_SimpleCookie,
     compat_etree_Element,
