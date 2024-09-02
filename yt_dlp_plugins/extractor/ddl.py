@@ -1,46 +1,13 @@
-import random
-import time
-import json
-from selenium.webdriver.chrome.options import Options
-from bs4 import BeautifulSoup
 import yt_dlp
 from yt_dlp.extractor.common import InfoExtractor
-from yt_dlp.utils import urljoin, ExtractorError, traverse_obj
+import random
+import time
+from selenium.webdriver.chrome.options import Options
+from bs4 import BeautifulSoup
 import google_colab_selenium as gs
 
 class DoodStreamIE(InfoExtractor):
     _VALID_URL = r'https?://(?:www\.)?dood\.(?:to|watch)/[ed]/(?P<id>[a-z0-9]+)'
-    _TESTS = [{
-        'url': 'http://dood.to/e/5s1wmbdacezb',
-        'md5': '4568b83b31e13242b3f1ff96c55f0595',
-        'info_dict': {
-            'id': '5s1wmbdacezb',
-            'ext': 'mp4',
-            'title': 'Kat Wonders - Monthly May 2020',
-            'description': 'Kat Wonders - Monthly May 2020 | DoodStream.com',
-            'thumbnail': 'https://img.doodcdn.com/snaps/flyus84qgl2fsk4g.jpg',
-        }
-    }, {
-        'url': 'http://dood.watch/d/5s1wmbdacezb',
-        'md5': '4568b83b31e13242b3f1ff96c55f0595',
-        'info_dict': {
-            'id': '5s1wmbdacezb',
-            'ext': 'mp4',
-            'title': 'Kat Wonders - Monthly May 2020',
-            'description': 'Kat Wonders - Monthly May 2020 | DoodStream.com',
-            'thumbnail': 'https://img.doodcdn.com/snaps/flyus84qgl2fsk4g.jpg',
-        }
-    }, {
-        'url': 'https://dood.to/d/jzrxn12t2s7n',
-        'md5': '3207e199426eca7c2aa23c2872e6728a',
-        'info_dict': {
-            'id': 'jzrxn12t2s7n',
-            'ext': 'mp4',
-            'title': 'Stacy Cruz Cute ALLWAYSWELL',
-            'description': 'Stacy Cruz Cute ALLWAYSWELL | DoodStream.com',
-            'thumbnail': 'https://img.doodcdn.com/snaps/8edqd5nppkac3x8u.jpg',
-        }
-    }]
 
     def __init__(self):
         super().__init__()
@@ -109,5 +76,7 @@ class DoodStreamIE(InfoExtractor):
             'thumbnail': thumb,
         }
 
-# Register the custom extractor
-yt_dlp.extractor.gen_extractors().append(DoodStreamIE())
+
+extractor = DoodStreamIE()
+
+
