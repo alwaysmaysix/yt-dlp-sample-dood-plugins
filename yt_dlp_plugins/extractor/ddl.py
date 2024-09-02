@@ -1,10 +1,11 @@
 import random
 import time
 import json
-import cloudscraper
+from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
 from yt_dlp.extractor.common import InfoExtractor
 from yt_dlp.utils import urljoin, ExtractorError, traverse_obj
+import google_colab_selenium as gs
 
 class DoodStreamIE(InfoExtractor):
     _VALID_URL = r'https?://(?:www\.)?dood\.(?:to|watch)/[ed]/(?P<id>[a-z0-9]+)'
@@ -42,50 +43,54 @@ class DoodStreamIE(InfoExtractor):
 
     def __init__(self):
         super().__init__()
-        self.scraper = self.create_random_scraper()
+        self.driver = self.setup_selenium()
 
-    def load_user_agents(self):
-        with open('/content/cloudscraper/cloudscraper/user_agent/browsers.json', 'r') as file:
-            data = json.load(file)
-            return data['user_agents']['desktop']['windows']['chrome']
+    def setup_selenium(self):
+        user_agents = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3',
+            'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; AS; rv:11.0) like Gecko',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.1 Safari/605.1.15',
+            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36']
+        
+        options = Options()
+        options.add_argument('--headless')
+        options.add_argument('--no-sandbox')
+        options.add_argument('--disable-dev-shm-usage')
+        options.add_argument("--window-size=1920,1080")
+        options.add_argument("--disable-infobars")
+        options.add_argument("--disable-popup-blocking")
+        options.add_argument("--ignore-certificate-errors")
+        options.add_argument("--incognito")
+        options.add_argument(f'--user-agent={random.choice(user_agents)}')
+        driver = gs.Chrome(options=options)
+        return driver
 
-    def create_random_scraper(self):
-        user_agents = self.load_user_agents()
-        random_user_agent = random.choice(user_agents)
-        scraper = cloudscraper.create_scraper(browser={
-            'browser': 'chrome',
-            'platform': 'windows',
-            'mobile': False,
-            'custom': random_user_agent
-        })
-        return scraper
-
-    def random_delay(self):
-        time.sleep(random.uniform(1, 5))
-
-    def get_soup(self, url):
-        self.random_delay()
-        response = self.scraper.get(url)
-        response.raise_for_status()
-        return BeautifulSoup(response.text, 'html.parser')
+    def get_page_content(self, url, request_interval=2, page_load_delay=2):
+        self.driver.get(url)
+        time.sleep(request_interval)
+        html_content = self.driver.page_source
+        time.sleep(page_load_delay)
+        return html_content
 
     def _real_extract(self, url):
         video_id = self._match_id(url)
         webpage_url = f'https://dood.to/e/{video_id}'
-        webpage = self.get_soup(webpage_url)
+        webpage = self.get_page_content(webpage_url)
+        soup = BeautifulSoup(webpage, 'html.parser')
 
-        title = self._html_search_meta(['og:title', 'twitter:title'], str(webpage), default=None)
-        thumb = self._html_search_meta(['og:image', 'twitter:image'], str(webpage), default=None)
-        token = self._html_search_regex(r'[?&]token=([a-z0-9]+)[&\']', str(webpage), 'token', fatal=False)
+        title = self._html_search_meta(['og:title', 'twitter:title'], str(soup), default=None)
+        thumb = self._html_search_meta(['og:image', 'twitter:image'], str(soup), default=None)
+        token = self._html_search_regex(r'[?&]token=([a-z0-9]+)[&\']', str(soup), 'token', fatal=False)
         description = self._html_search_meta(
-            ['og:description', 'description', 'twitter:description'], str(webpage), default=None)
+            ['og:description', 'description', 'twitter:description'], str(soup), default=None)
 
         if not token:
             raise ExtractorError('Unable to extract token', expected=True)
 
-        pass_md5 = self._html_search_regex(r'(/pass_md5.*?)\'', str(webpage), 'pass_md5')
+        pass_md5 = self._html_search_regex(r'(/pass_md5.*?)\'', str(soup), 'pass_md5')
         pass_md5_url = urljoin('https://dood.to', pass_md5)
-        pass_md5_content = self.scraper.get(pass_md5_url).text
+        pass_md5_content = self.driver.get(pass_md5_url).text
 
         final_url = ''.join((
             pass_md5_content,
