@@ -80,42 +80,35 @@ class DoodStreamIE(InfoExtractor):
         soup = BeautifulSoup(html_content, 'html.parser')
         return soup
 
-    def _real_extract(self, url):
-        # Use methods and properties from InfoExtractor as needed
-        video_id = self._match_id(url)
-        url = f'https://dood.to/e/{video_id}'
-        webpage = self.get_soup(url)  # Use the new scraper method
+def _real_extract(self, url):
+    video_id = self._match_id(url)
+    url = f'https://dood.to/e/{video_id}'
+    webpage = self.get_soup(url)  # Use the new scraper method
 
-        title = self._html_search_meta(['og:title', 'twitter:title'], str(webpage), default=None)
-        thumb = self._html_search_meta(['og:image', 'twitter:image'], str(webpage), default=None)
-        token = self._html_search_regex(r'[?&]token=([a-z0-9]+)[&\']', str(webpage), 'token')
-        description = self._html_search_meta(
-            ['og:description', 'description', 'twitter:description'], str(webpage), default=None)
+    title = self._html_search_meta(['og:title', 'twitter:title'], str(webpage), default=None)
+    thumb = self._html_search_meta(['og:image', 'twitter:image'], str(webpage), default=None)
+    token = self._html_search_regex(r'token\s*=\s*[\'"]([a-zA-Z0-9]+)[\'"]', str(webpage), 'token')
+    description = self._html_search_meta(['og:description', 'description', 'twitter:description'], str(webpage), default=None)
 
-        # Use urljoin utility from yt_dlp
-        base_url = 'https://dood.to'
-        pass_md5 = self._html_search_regex(r'(/pass_md5.*?)\'', str(webpage), 'pass_md5')
-        pass_md5_url = urljoin(base_url, pass_md5)
-        
-        # Retrieve the MD5 part of the URL with the scraper
-        pass_md5_response = self.scraper.get(pass_md5_url)
-        pass_md5_content = pass_md5_response.text
+    base_url = 'https://dood.to'
+    pass_md5_url = self._html_search_regex(r"['\"](/pass_md5/[^'\"]+)", str(webpage), 'pass_md5')
+    pass_md5_url = urljoin(base_url, pass_md5_url)
 
-        final_url = ''.join((
-            pass_md5_content,
-            *(random.choice(string.ascii_letters + string.digits) for _ in range(10)),
-            f'?token={token}&expiry={int(time.time() * 1000)}',
-        ))
+    pass_md5_response = self.scraper.get(pass_md5_url)
+    pass_md5_content = pass_md5_response.text.strip()
 
-        return {
-            'id': video_id,
-            'title': title,
-            'url': final_url,
-            'http_headers': {'referer': url},
-            'ext': 'mp4',
-            'description': description,
-            'thumbnail': thumb,
-        }
+    random_string = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(10))
+    final_url = f"{pass_md5_content}{random_string}?token={token}&expiry={int(time.time() * 1000)}"
+
+    return {
+        'id': video_id,
+        'title': title,
+        'url': final_url,
+        'http_headers': {'referer': url},
+        'ext': 'mp4',
+        'description': description,
+        'thumbnail': thumb,
+    }
 
 # Instantiate the class
 dood_stream_ie = DoodStreamIE()
