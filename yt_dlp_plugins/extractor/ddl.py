@@ -1,17 +1,10 @@
-# coding: utf-8
-from __future__ import unicode_literals
-
-import string
 import random
 import time
 import json
 import cloudscraper
 from bs4 import BeautifulSoup
-
-# Import InfoExtractor and utilities from yt_dlp
 from yt_dlp.extractor.common import InfoExtractor
-from yt_dlp.utils import js_to_json, urljoin
-
+from yt_dlp.utils import urljoin, ExtractorError, traverse_obj
 
 class DoodStreamIE(InfoExtractor):
     _VALID_URL = r'https?://(?:www\.)?dood\.(?:to|watch)/[ed]/(?P<id>[a-z0-9]+)'
@@ -48,15 +41,14 @@ class DoodStreamIE(InfoExtractor):
     }]
 
     def __init__(self):
+        super().__init__()
         self.scraper = self.create_random_scraper()
 
-    # Function to load user agents from browsers.json
     def load_user_agents(self):
         with open('/content/cloudscraper/cloudscraper/user_agent/browsers.json', 'r') as file:
             data = json.load(file)
             return data['user_agents']['desktop']['windows']['chrome']
 
-    # Function to create a scraper with a random user agent
     def create_random_scraper(self):
         user_agents = self.load_user_agents()
         random_user_agent = random.choice(user_agents)
@@ -68,47 +60,48 @@ class DoodStreamIE(InfoExtractor):
         })
         return scraper
 
-    # Function to add random delay
     def random_delay(self):
-        time.sleep(random.uniform(1, 5))  # Random delay between 1 to 5 seconds
+        time.sleep(random.uniform(1, 5))
 
     def get_soup(self, url):
-        self.random_delay()  # Add delay before request
+        self.random_delay()
         response = self.scraper.get(url)
-        response.raise_for_status()  # Raise an exception for HTTP errors
-        html_content = response.text
-        soup = BeautifulSoup(html_content, 'html.parser')
-        return soup
+        response.raise_for_status()
+        return BeautifulSoup(response.text, 'html.parser')
 
-def _real_extract(self, url):
-    video_id = self._match_id(url)
-    url = f'https://dood.to/e/{video_id}'
-    webpage = self.get_soup(url)  # Use the new scraper method
+    def _real_extract(self, url):
+        video_id = self._match_id(url)
+        webpage_url = f'https://dood.to/e/{video_id}'
+        webpage = self.get_soup(webpage_url)
 
-    title = self._html_search_meta(['og:title', 'twitter:title'], str(webpage), default=None)
-    thumb = self._html_search_meta(['og:image', 'twitter:image'], str(webpage), default=None)
-    token = self._html_search_regex(r'token\s*=\s*[\'"]([a-zA-Z0-9]+)[\'"]', str(webpage), 'token')
-    description = self._html_search_meta(['og:description', 'description', 'twitter:description'], str(webpage), default=None)
+        title = self._html_search_meta(['og:title', 'twitter:title'], str(webpage), default=None)
+        thumb = self._html_search_meta(['og:image', 'twitter:image'], str(webpage), default=None)
+        token = self._html_search_regex(r'[?&]token=([a-z0-9]+)[&\']', str(webpage), 'token', fatal=False)
+        description = self._html_search_meta(
+            ['og:description', 'description', 'twitter:description'], str(webpage), default=None)
 
-    base_url = 'https://dood.to'
-    pass_md5_url = self._html_search_regex(r"['\"](/pass_md5/[^'\"]+)", str(webpage), 'pass_md5')
-    pass_md5_url = urljoin(base_url, pass_md5_url)
+        if not token:
+            raise ExtractorError('Unable to extract token', expected=True)
 
-    pass_md5_response = self.scraper.get(pass_md5_url)
-    pass_md5_content = pass_md5_response.text.strip()
+        pass_md5 = self._html_search_regex(r'(/pass_md5.*?)\'', str(webpage), 'pass_md5')
+        pass_md5_url = urljoin('https://dood.to', pass_md5)
+        pass_md5_content = self.scraper.get(pass_md5_url).text
 
-    random_string = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(10))
-    final_url = f"{pass_md5_content}{random_string}?token={token}&expiry={int(time.time() * 1000)}"
+        final_url = ''.join((
+            pass_md5_content,
+            *(random.choice(string.ascii_letters + string.digits) for _ in range(10)),
+            f'?token={token}&expiry={int(time.time() * 1000)}',
+        ))
 
-    return {
-        'id': video_id,
-        'title': title,
-        'url': final_url,
-        'http_headers': {'referer': url},
-        'ext': 'mp4',
-        'description': description,
-        'thumbnail': thumb,
-    }
+        return {
+            'id': video_id,
+            'title': title,
+            'url': final_url,
+            'http_headers': {'referer': webpage_url},
+            'ext': 'mp4',
+            'description': description,
+            'thumbnail': thumb,
+        }
 
-# Instantiate the class
-dood_stream_ie = DoodStreamIE()
+# Register the custom extractor
+yt_dlp.extractor.gen_extractors().append(DoodStreamIE())
