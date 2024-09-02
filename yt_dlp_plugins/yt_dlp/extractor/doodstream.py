@@ -4,11 +4,11 @@ from __future__ import unicode_literals
 import string
 import random
 import time
+import json
+import cloudscraper
+from bs4 import BeautifulSoup
 
-from .common import InfoExtractor
-
-
-class DoodStreamIE(InfoExtractor):
+class DoodStreamIE:
     _VALID_URL = r'https?://(?:www\.)?dood\.(?:to|watch)/[ed]/(?P<id>[a-z0-9]+)'
     _TESTS = [{
         'url': 'http://dood.to/e/5s1wmbdacezb',
@@ -42,25 +42,68 @@ class DoodStreamIE(InfoExtractor):
         }
     }]
 
+    def __init__(self):
+        self._info_extractor_cls = None
+        self.scraper = self.create_random_scraper()
+
+    @property
+    def info_extractor_cls(self):
+        # Dynamic import only when needed
+        if self._info_extractor_cls is None:
+            from .common import InfoExtractor
+            self._info_extractor_cls = InfoExtractor
+        return self._info_extractor_cls
+
+    # Function to load user agents from browsers.json
+    def load_user_agents(self):
+        with open('/content/cloudscraper/cloudscraper/user_agent/browsers.json', 'r') as file:
+            data = json.load(file)
+            return data['user_agents']['desktop']['windows']['chrome']
+
+    # Function to create a scraper with a random user agent
+    def create_random_scraper(self):
+        user_agents = self.load_user_agents()
+        random_user_agent = random.choice(user_agents)
+        scraper = cloudscraper.create_scraper(browser={
+            'browser': 'chrome',
+            'platform': 'windows',
+            'mobile': False,
+            'custom': random_user_agent
+        })
+        return scraper
+
+    # Function to add random delay
+    def random_delay(self):
+        time.sleep(random.uniform(1, 5))  # Random delay between 1 to 5 seconds
+
+    def get_soup(self, url):
+        self.random_delay()  # Add delay before request
+        response = self.scraper.get(url)
+        response.raise_for_status()  # Raise an exception for HTTP errors
+        html_content = response.text
+        soup = BeautifulSoup(html_content, 'html.parser')
+        return soup
+
     def _real_extract(self, url):
+        # Use methods and properties from InfoExtractor as needed
         video_id = self._match_id(url)
         url = f'https://dood.to/e/{video_id}'
-        webpage = self._download_webpage(url, video_id)
+        webpage = self.get_soup(url)  # Use the new scraper method
 
-        title = self._html_search_meta(['og:title', 'twitter:title'], webpage, default=None)
-        thumb = self._html_search_meta(['og:image', 'twitter:image'], webpage, default=None)
-        token = self._html_search_regex(r'[?&]token=([a-z0-9]+)[&\']', webpage, 'token')
+        title = self._html_search_meta(['og:title', 'twitter:title'], str(webpage), default=None)
+        thumb = self._html_search_meta(['og:image', 'twitter:image'], str(webpage), default=None)
+        token = self._html_search_regex(r'[?&]token=([a-z0-9]+)[&\']', str(webpage), 'token')
         description = self._html_search_meta(
-            ['og:description', 'description', 'twitter:description'], webpage, default=None)
+            ['og:description', 'description', 'twitter:description'], str(webpage), default=None)
 
+        # Only set other necessary headers (like referer), not user-agent
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:53.0) Gecko/20100101 Firefox/66.0',
             'referer': url
         }
 
-        pass_md5 = self._html_search_regex(r'(/pass_md5.*?)\'', webpage, 'pass_md5')
+        pass_md5 = self._html_search_regex(r'(/pass_md5.*?)\'', str(webpage), 'pass_md5')
         final_url = ''.join((
-            self._download_webpage(f'https://dood.to{pass_md5}', video_id, headers=headers),
+            self.scraper.get(f'https://dood.to{pass_md5}', headers=headers).text,
             *(random.choice(string.ascii_letters + string.digits) for _ in range(10)),
             f'?token={token}&expiry={int(time.time() * 1000)}',
         ))
@@ -74,3 +117,6 @@ class DoodStreamIE(InfoExtractor):
             'description': description,
             'thumbnail': thumb,
         }
+
+# Instantiate the class using dynamic import logic
+dood_stream_ie = DoodStreamIE()
